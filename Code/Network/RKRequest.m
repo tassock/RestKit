@@ -119,6 +119,17 @@
 	[self addHeadersToRequest];
 }
 
+- (void)cancelAndInformDelegate:(BOOL)informDelegate {
+	[_connection cancel];
+	[_connection release];
+	_connection = nil;
+	_isLoading = NO;
+    
+    if (informDelegate && [_delegate respondsToSelector:@selector(requestDidCancelLoad:)]) {
+        [_delegate requestDidCancelLoad:self];
+    }
+}
+
 - (NSString*)HTTPMethod {
 	switch (_method) {
 		case RKRequestMethodGET:
@@ -159,6 +170,16 @@
     return [RKClient sharedClient] == nil || [[RKClient sharedClient] isNetworkAvailable];
 }
 
+- (void)cleanupBackgroundTask {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:RKRequestDidLoadResponseNotification object:self];
+    
+    UIApplication* app = [UIApplication sharedApplication];
+    if ([app respondsToSelector:@selector(beginBackgroundTaskWithExpirationHandler:)]) {
+		[app endBackgroundTask:_backgroundTaskIdentifier];
+		_backgroundTaskIdentifier = UIBackgroundTaskInvalid;
+    }
+}
+
 - (void)sendAsynchronously {
 	if ([self shouldDispatchRequest]) {
         // Background Request Policy support
@@ -178,9 +199,19 @@
             _backgroundTaskIdentifier = [app beginBackgroundTaskWithExpirationHandler:^{
                 NSLog(@"Background upload time expired, canceling request.");
                 
-                // TODO: Add a timeout case? or just cancel it?
-                [self cancel];
+                [self cancelAndInformDelegate:NO];
+                [self cleanupBackgroundTask];
+                
+                if ([_delegate respondsToSelector:@selector(requestDidTimeout:)]) {
+                    [_delegate requestDidTimeout:self];
+                }
             }];
+            
+            // Watch for a response to load to cleanup the background task
+            [[NSNotificationCenter defaultCenter] addObserver:self 
+                                                     selector:@selector(cleanupBackgroundTask) 
+                                                         name:RKRequestDidLoadResponseNotification 
+                                                       object:self];
             
             // Start the potentially long-running request
             [self fireAsynchronousRequest];
@@ -230,17 +261,6 @@
 	}
 
 	return response;
-}
-
-- (void)cancelAndInformDelegate:(BOOL)informDelegate {
-	[_connection cancel];
-	[_connection release];
-	_connection = nil;
-	_isLoading = NO;
-    
-    if (informDelegate && [_delegate respondsToSelector:@selector(requestDidCancelLoad:)]) {
-        [_delegate requestDidCancelLoad:self];
-    }
 }
 
 - (void)cancel {

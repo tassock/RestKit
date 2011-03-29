@@ -243,4 +243,10 @@ typedef enum RKRequestBackgroundPolicy {
  */
 - (void)requestDidCancelLoad:(RKRequest*)request;
 
+/**
+ * Sent to the delegate when a request has timed out. This is sent when a
+ * backgrounded request expired before completion.
+ */
+- (void)requestDidTimeout:(RKRequest*)request;
+
 @end
