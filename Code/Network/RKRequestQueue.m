@@ -6,6 +6,7 @@
 //  Copyright 2010 Two Toasters. All rights reserved.
 //
 
+#import <UIKit/UIKit.h>
 #import "RKRequestQueue.h"
 #import "RKResponse.h"
 #import "RKNotifications.h"
@@ -40,6 +41,7 @@ static const NSInteger kMaxConcurrentLoads = 5;
 		_requests = [[NSMutableArray alloc] init];
 		_suspended = NO;
 		_totalLoading = 0;
+        
 		[[NSNotificationCenter defaultCenter] addObserver:self
 												 selector:@selector(responseDidLoad:)
 													 name:kRKResponseReceivedNotification
@@ -48,14 +50,25 @@ static const NSInteger kMaxConcurrentLoads = 5;
 												 selector:@selector(responseDidLoad:)
 													 name:kRKRequestFailedWithErrorNotification
 												   object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self 
+                                                 selector:@selector(willTransitionToBackground) 
+                                                     name:UIApplicationDidEnterBackgroundNotification 
+                                                   object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self 
+                                                 selector:@selector(willTransitionToForeground) 
+                                                     name:UIApplicationWillEnterForegroundNotification 
+                                                   object:nil];
 	}
 	return self;
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+     
 	[_queueTimer invalidate];
 	[_requests release];
 	_requests = nil;
+     
 	[super dealloc];
 }
 
@@ -69,14 +82,14 @@ static const NSInteger kMaxConcurrentLoads = 5;
 	}
 }
 
-- (void)dispatchRequest:(RKRequest*)request {
+- (void)dispatchRequest:(RKRequest*)request {        
 	[request performSelector:@selector(fireAsynchronousRequest)];
 }
 
 - (void)loadNextInQueue {
 	// This makes sure that the Request Queue does not fire off any requests until the Reachability state has been determined.
-	// This prevents the request queue from
-	if ([[[RKClient sharedClient] baseURLReachabilityObserver] networkStatus] == RKReachabilityIndeterminate) {
+	if ([[[RKClient sharedClient] baseURLReachabilityObserver] networkStatus] == RKReachabilityIndeterminate || 
+        self.suspended) {
 		[self loadNextInQueueDelayed];
 		return;
 	}
@@ -154,6 +167,10 @@ static const NSInteger kMaxConcurrentLoads = 5;
 	[pool drain];
 }
 
+- (BOOL)containsRequest:(RKRequest*)request {
+    return [_requests containsObject:request];
+}
+
 /**
  * Invoked via observation when a request has loaded a response. Remove
  * the completed request from the queue and continue processing
@@ -175,6 +192,17 @@ static const NSInteger kMaxConcurrentLoads = 5;
 
 		[self loadNextInQueue];
 	}
+}
+
+#pragma mark - Background Request Support
+
+- (void)willTransitionToBackground {
+    // Suspend the queue so background requests do not trigger additional requests on state changes
+    _suspended = YES;
+}
+
+- (void)willTransitionToForeground {
+    _suspended = NO;
 }
 
 @end
