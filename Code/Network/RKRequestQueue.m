@@ -82,10 +82,6 @@ static const NSInteger kMaxConcurrentLoads = 5;
 	}
 }
 
-- (void)dispatchRequest:(RKRequest*)request {        
-	[request performSelector:@selector(fireAsynchronousRequest)];
-}
-
 - (void)loadNextInQueue {
 	// This makes sure that the Request Queue does not fire off any requests until the Reachability state has been determined.
 	if ([[[RKClient sharedClient] baseURLReachabilityObserver] networkStatus] == RKReachabilityIndeterminate || 
@@ -102,7 +98,7 @@ static const NSInteger kMaxConcurrentLoads = 5;
 	for (RKRequest* request in requestsCopy) {
 		if (![request isLoading] && ![request isLoaded] && _totalLoading < kMaxConcurrentLoads) {
 			++_totalLoading;
-			[self dispatchRequest:request];
+            [request sendAsynchronously];
 		}
 	}
 
@@ -198,11 +194,11 @@ static const NSInteger kMaxConcurrentLoads = 5;
 
 - (void)willTransitionToBackground {
     // Suspend the queue so background requests do not trigger additional requests on state changes
-    _suspended = YES;
+    self.suspended = YES;
 }
 
 - (void)willTransitionToForeground {
-    _suspended = NO;
+    self.suspended = NO;
 }
 
 @end

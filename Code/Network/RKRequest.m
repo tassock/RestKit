@@ -33,8 +33,7 @@
 		_URLRequest = [[NSMutableURLRequest alloc] initWithURL:_URL];
 		_connection = nil;
 		_isLoading = NO;
-		_isLoaded = NO;
-        _backgroundPolicy = RKRequestBackgroundPolicyCancel;
+		_isLoaded = NO;        
 	}
 	return self;
 }
@@ -42,7 +41,7 @@
 - (id)initWithURL:(NSURL*)URL delegate:(id)delegate {
     self = [self initWithURL:URL];
 	if (self) {
-		_delegate = delegate;
+		_delegate = delegate;        
 	}
 	return self;
 }
@@ -50,6 +49,7 @@
 - (id)init {
     self = [super init];
     if (self) {
+        _backgroundPolicy = RKRequestBackgroundPolicyNone;
         _backgroundTaskIdentifier = UIBackgroundTaskInvalid;
     }
     
@@ -171,7 +171,11 @@
 }
 
 - (void)cleanupBackgroundTask {
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:RKRequestDidLoadResponseNotification object:self];
+    if (UIBackgroundTaskInvalid == self.backgroundTaskIdentifier) {
+        return;
+    }
+    
+    NSLog(@"Cleaning up background task...");
     
     UIApplication* app = [UIApplication sharedApplication];
     if ([app respondsToSelector:@selector(beginBackgroundTaskWithExpirationHandler:)]) {
@@ -195,9 +199,11 @@
                                                          name:UIApplicationDidEnterBackgroundNotification 
                                                        object:nil];
         } else if (self.backgroundPolicy == RKRequestBackgroundPolicyContinue) {
+            NSLog(@"Beginning background task to perform processing...");
+            
             // Fork a background task for continueing a long-running request
             _backgroundTaskIdentifier = [app beginBackgroundTaskWithExpirationHandler:^{
-                NSLog(@"Background upload time expired, canceling request.");
+                NSLog(@"Background request time expired, canceling request.");
                 
                 [self cancelAndInformDelegate:NO];
                 [self cleanupBackgroundTask];
@@ -206,12 +212,6 @@
                     [_delegate requestDidTimeout:self];
                 }
             }];
-            
-            // Watch for a response to load to cleanup the background task
-            [[NSNotificationCenter defaultCenter] addObserver:self 
-                                                     selector:@selector(cleanupBackgroundTask) 
-                                                         name:RKRequestDidLoadResponseNotification 
-                                                       object:self];
             
             // Start the potentially long-running request
             [self fireAsynchronousRequest];
@@ -284,7 +284,9 @@
 	if ([_delegate respondsToSelector:@selector(request:didLoadResponse:)]) {
 		[_delegate request:self didLoadResponse:response];
 	}
-
+    
+    [self cleanupBackgroundTask];
+    
 	NSDictionary* userInfo = [NSDictionary dictionaryWithObject:response forKey:@"response"];
     [[NSNotificationCenter defaultCenter] postNotificationName:RKRequestDidLoadResponseNotification object:self userInfo:userInfo];
     [[NSNotificationCenter defaultCenter] postNotificationName:RKResponseReceivedNotification object:response userInfo:nil];   
