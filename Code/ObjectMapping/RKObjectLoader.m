@@ -75,7 +75,7 @@
 								  [self URL], @"URL",
 								  receivedAt, @"receivedAt",
 								  nil];
-		[[NSNotificationCenter defaultCenter] postNotificationName:kRKResponseReceivedNotification
+		[[NSNotificationCenter defaultCenter] postNotificationName:RKResponseReceivedNotification
 															object:_response
 														  userInfo:userInfo];
 	} else {
@@ -84,7 +84,7 @@
 								  receivedAt, @"receivedAt",
 								  error, @"error",
 								  nil];
-		[[NSNotificationCenter defaultCenter] postNotificationName:kRKRequestFailedWithErrorNotification
+		[[NSNotificationCenter defaultCenter] postNotificationName:RKRequestFailedWithErrorNotification
 															object:self
 														  userInfo:userInfo];
 	}
@@ -205,8 +205,11 @@
 	}
 
 	if (NO == [self encounteredErrorWhileProcessingRequest:response]) {
-		// TODO: When other mapping formats are supported, unwind this assumption... Should probably be an expected MIME types array set by client/manager
-		if ([response isSuccessful] && [response isJSON]) {
+        // TODO: Should probably be an expected MIME types array set by client/manager
+        // if ([self.objectMapper hasParserForMIMEType:[response MIMEType]) canMapFromMIMEType:
+        BOOL isAcceptable = (self.objectMapper.format == RKMappingFormatXML && [response isXML]) ||
+                            (self.objectMapper.format == RKMappingFormatJSON && [response isJSON]);
+		if ([response isSuccessful] && isAcceptable) {
 			[self performSelectorInBackground:@selector(processLoadModelsInBackground:) withObject:response];
 		} else {
 			NSLog(@"Encountered unexpected response code: %d (MIME Type: %@)", response.statusCode, response.MIMEType);

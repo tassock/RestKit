@@ -48,7 +48,6 @@ typedef enum RKRequestBackgroundPolicy {
 	NSObject<RKRequestSerializable>* _params;
 	NSObject<RKRequestDelegate>* _delegate;
 	id _userData;
-    NSString* _authenticationScheme;
 	NSString* _username;
 	NSString* _password;
 	RKRequestMethod _method;
@@ -112,7 +111,6 @@ typedef enum RKRequestBackgroundPolicy {
 
 // The authentication scheme to use. When set to kCFHTTPAuthenticationSchemeBasic, authentication will
 // be setup before a challenge occurs
-@property(nonatomic, retain) NSString* authenticationScheme;
 @property(nonatomic, retain) NSString* username;
 @property(nonatomic, retain) NSString* password;
 

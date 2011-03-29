@@ -14,13 +14,13 @@
 #import "RKObjectMapper.h"
 #import "NSDictionary+RKAdditions.h"
 #import "RKJSONParser.h"
+#import "RKXMLParser.h"
 #import "Errors.h"
 
 // Default format string for date and time objects from Rails
 // TODO: Rails specifics should probably move elsewhere...
 static const NSString* kRKModelMapperRailsDateTimeFormatString = @"yyyy-MM-dd'T'HH:mm:ss'Z'"; // 2009-08-08T17:23:59Z
 static const NSString* kRKModelMapperRailsDateFormatString = @"MM/dd/yyyy";
-static const NSString* kRKModelMapperMappingFormatParserKey = @"RKMappingFormatParser";
 
 @interface RKObjectMapper (Private)
 
@@ -84,9 +84,6 @@ static const NSString* kRKModelMapperMappingFormatParserKey = @"RKMappingFormatP
 }
 
 - (void)setFormat:(RKMappingFormat)format {
-	if (format == RKMappingFormatXML) {
-		[NSException raise:@"No XML parser is available" format:@"RestKit does not currently have XML support. Use JSON."];
-	}
 	_format = format;
 }
 
@@ -94,16 +91,23 @@ static const NSString* kRKModelMapperMappingFormatParserKey = @"RKMappingFormatP
 // Mapping from a string
 
 - (id)parseString:(NSString*)string {
-	NSMutableDictionary* threadDictionary = [[NSThread currentThread] threadDictionary];
-	NSObject<RKParser>* parser = [threadDictionary objectForKey:kRKModelMapperMappingFormatParserKey];
-	if (!parser) {
-		if (_format == RKMappingFormatJSON) {
-			parser = [[RKJSONParser alloc] init];
-			[threadDictionary setObject:parser forKey:kRKModelMapperMappingFormatParserKey];
-			[parser release];
-		}
-	}
+    Class parserClass;
+    NSString* className = nil;
+    NSObject<RKParser>* parser = nil;
+    
+    if (_format == RKMappingFormatJSON) {
+        className = @"RKJSONParser";
+    } else if (_format == RKMappingFormatXML) {
+        className = @"RKXMLParser";
+    }
+    
+    parserClass = NSClassFromString(className);
+    if (nil == parserClass) {
+        [NSException raise:@"Unable to find an appropriate parser." 
+                    format:@"The object mapper attempted to process a payload via the '%@' parser, but it was not found.", className];
+    }
 	
+    parser = [[parserClass alloc] init];
 	id result = nil;
 	@try {
 		result = [parser objectFromString:string];
@@ -111,6 +115,8 @@ static const NSString* kRKModelMapperMappingFormatParserKey = @"RKMappingFormatP
 	@catch (NSException* e) {
 		NSLog(@"[RestKit] RKObjectMapper:parseString: Exception (%@) parsing error from string: %@", [e reason], string);
 	}
+    [parser release];
+    
 	return result;
 }
 
@@ -340,7 +346,7 @@ static const NSString* kRKModelMapperMappingFormatParserKey = @"RKMappingFormatP
 - (void)setPropertiesOfModel:(NSObject<RKObjectMappable>*)model fromElements:(NSDictionary*)elements {
 	NSDictionary* elementToPropertyMappings = [self elementToPropertyMappingsForModel:model];
 	for (NSString* elementKeyPath in elementToPropertyMappings) {		
-		id elementValue = nil;		
+		id elementValue = nil;
 		BOOL setValue = YES;
 		
 		@try {
@@ -351,8 +357,7 @@ static const NSString* kRKModelMapperMappingFormatParserKey = @"RKMappingFormatP
 			setValue = NO;
 		}
 		
-		// TODO: Need a way to differentiate between a keyPath that exists, but contains a nil
-		// value and one that is not present in the payload. Causes annoying problems!
+		// nil is returned when the collection does not contain the element
 		if (nil == elementValue) {
 			setValue = (_missingElementMappingPolicy == RKSetNilForMissingElementMappingPolicy);
 		}
@@ -367,6 +372,24 @@ static const NSString* kRKModelMapperMappingFormatParserKey = @"RKMappingFormatP
 					propertyValue = [self dateInLocalTime:date];
 				}
 			}
+            
+            // If we know the destination class, the property is not of the correct class, and the property value is not null or nil...
+            // if (class && propertyValue && ![propertyValue isKindOfClass:class] && ![propertyValue isEqual:[NSNull null]]) {
+            if (class && propertyValue && ![propertyValue isKindOfClass:class] && ![propertyValue isEqual:[NSNull null]]) {
+                // Then we must cooerce the element (probably a string) into the correct class.
+                // Currently this only supports NSNumbers (NSDates are handled above).
+                // New cooersions will be added on an as-needed basis.
+                if (class == [NSNumber class]) {
+                    if ([propertyValue isEqualToString:@"true"] ||
+                        [propertyValue isEqualToString:@"false"]) {
+                        propertyValue = [NSNumber numberWithBool:[propertyValue isEqualToString:@"true"]];
+                    } else {
+                        propertyValue = [NSNumber numberWithDouble:[propertyValue doubleValue]];
+                    }
+                } else {
+                    [NSException raise:@"NoElementValueConversionMethod" format:@"Don't know how to convert %@ (%@) to %@", propertyValue, [propertyValue class], class];
+                }
+            }
 			
 			[self updateModel:model ifNewPropertyValue:propertyValue forPropertyNamed:propertyName];
 		}
