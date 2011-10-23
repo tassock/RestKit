@@ -7,6 +7,7 @@
 //
 
 #import "RKHuman.h"
+#import "NSDictionary+RKAdditions.h"
 
 @implementation RKHuman
 
@@ -19,6 +20,7 @@
 @dynamic createdAt;
 @dynamic updatedAt;
 
+<<<<<<< HEAD
 @dynamic cats;
 
 + (NSDictionary*)elementToRelationshipMappings {
@@ -43,13 +45,13 @@
 			@"railsID", @"id",
 			nil];
 }
+=======
+@dynamic favoriteCat;
+@dynamic cats;
+>>>>>>> upstream/master
 
 - (NSString*)polymorphicResourcePath {
 	return @"/this/is/the/path";
-}
-
-+ (NSString*)primaryKeyProperty {
-	return @"railsID";
 }
 
 @end
